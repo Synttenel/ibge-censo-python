@@ -2,16 +2,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 
-# ==========================================
-# 1. LEITURA DO ARQUIVO
-# ==========================================
+
+# Leitura do Arquivo
 
 df = pd.read_csv("Analfabetismo_data_ETL_Completo.csv")
 
 
-# ==========================================
-# 2. TRANSFORMAÇÃO DOS DADOS
-# ==========================================
+# Transformação de valores do arquivo em valor numérico
 
 df["Alfabetizadas"] = pd.to_numeric(
     df["Alfabetizadas"],
@@ -29,9 +26,7 @@ df["Total"] = pd.to_numeric(
 )
 
 
-# ==========================================
-# 3. CÁLCULO DA TAXA DE ANALFABETISMO
-# ==========================================
+# Taxa de Analfabetismo
 
 df["Taxa_Analfabetismo_Pct"] = (
     df["Não alfabetizadas"] / df["Total"]
@@ -42,17 +37,13 @@ df["Taxa_Analfabetismo_Pct"] = (
 )
 
 
-# ==========================================
-# 4. MOSTRAR PARTE DA TABELA
-# ==========================================
 
+# Dataframe printado no terminal, contagem de linhas
 
 print(df)
 
 
-# ==========================================
-# 5. SALVAR O RESULTADO
-# ==========================================
+# Criação de um arquivo para armazenar as etapas de ETL
 
 df.to_csv(
     "Analfabetismo_ETL_Final.csv",
@@ -61,10 +52,7 @@ df.to_csv(
 )
 
 
-# ==========================================
-# 6. GRÁFICO - REGIÃO
-# ==========================================
-
+# Gráfico de Região
 regioes = [
     "Nordeste",
     "Norte",
@@ -127,9 +115,7 @@ plt.tight_layout()
 plt.show()
 
 
-# ==========================================
-# 7. GRÁFICO - COR OU RAÇA
-# ==========================================
+# Gráfico de Cor ou Raça
 
 cores_raca = [
     "Indígena",
@@ -193,9 +179,7 @@ plt.tight_layout()
 plt.show()
 
 
-# ==========================================
-# 8. GRÁFICO - FAIXA ETÁRIA
-# ==========================================
+# Gráfico de Idade/ faixa etária
 
 idades = [
     "15 a 19 anos",
@@ -257,9 +241,7 @@ plt.tight_layout()
 plt.show()
 
 
-# ==========================================
-# GRÁFICO - SEXO
-# ==========================================
+# Gráfico Sexo/Gênero
 
 dados_sexo = df[
     (df["Localizacao"] == "Brasil") &
