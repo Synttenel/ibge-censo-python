@@ -1,161 +1,328 @@
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 
+
 # ==========================================
-# ETAPA 1: EXTRACT & TRANSFORM (ETL)
+# 1. LEITURA DO ARQUIVO
 # ==========================================
 
-# 1. Leitura do ficheiro bruto
-with open('Analfabetismo_data.csv', 'r', encoding='utf-8', errors='ignore') as f:
-    all_lines = f.readlines()
+df = pd.read_csv("Analfabetismo_data_ETL_Completo.csv")
 
-# Função para preenchimento sequencial (forward-fill) em listas de cabeçalho
-def ffill_list(l):
-    res, curr = [], ''
-    for item in l:
-        if item != '': 
-            curr = item
-        res.append(curr)
-    return res
 
-# 2. Reconstrução dos níveis de cabeçalho
-sexo_list = ffill_list(all_lines[4].strip().split(';'))
-raca_list = ffill_list(all_lines[5].strip().split(';'))
-idade_list = ffill_list(all_lines[6].strip().split(';'))
-status_list = all_lines[7].strip().split(';')
+# ==========================================
+# 2. TRANSFORMAÇÃO DOS DADOS
+# ==========================================
 
-col_tuples = [
-    (sexo_list[i], raca_list[i], idade_list[i], status_list[i]) 
-    for i in range(1, len(status_list))
+df["Alfabetizadas"] = pd.to_numeric(
+    df["Alfabetizadas"],
+    errors="coerce"
+)
+
+df["Não alfabetizadas"] = pd.to_numeric(
+    df["Não alfabetizadas"],
+    errors="coerce"
+)
+
+df["Total"] = pd.to_numeric(
+    df["Total"],
+    errors="coerce"
+)
+
+
+# ==========================================
+# 3. CÁLCULO DA TAXA DE ANALFABETISMO
+# ==========================================
+
+df["Taxa_Analfabetismo_Pct"] = (
+    df["Não alfabetizadas"] / df["Total"]
+) * 100
+
+df["Taxa_Analfabetismo_Pct"] = (
+    df["Taxa_Analfabetismo_Pct"].round(2)
+)
+
+
+# ==========================================
+# 4. MOSTRAR PARTE DA TABELA
+# ==========================================
+
+
+print(df)
+
+
+# ==========================================
+# 5. SALVAR O RESULTADO
+# ==========================================
+
+df.to_csv(
+    "Analfabetismo_ETL_Final.csv",
+    index=False,
+    encoding="utf-8-sig"
+)
+
+
+# ==========================================
+# 6. GRÁFICO - REGIÃO
+# ==========================================
+
+regioes = [
+    "Nordeste",
+    "Norte",
+    "Centro-Oeste",
+    "Sudeste",
+    "Sul"
 ]
 
-# 3. Leitura dos dados numéricos
-data_rows = [line.strip().split(';')[1:] for line in all_lines[8:41]]
-locations = [line.strip().split(';')[0] for line in all_lines[8:41]]
+dados_regiao = df[
+    (df["Localizacao"].isin(regioes)) &
+    (df["Sexo"] == "Total") &
+    (df["Cor_Raca"] == "Total") &
+    (df["Grupo_Idade"] == "Total")
+]
 
-columns = pd.MultiIndex.from_tuples(
-    col_tuples, 
-    names=['Sexo', 'Cor_Raca', 'Grupo_Idade', 'Status_Alfabetizacao']
+dados_regiao = dados_regiao.set_index("Localizacao")
+dados_regiao = dados_regiao.loc[regioes]
+
+
+plt.figure(figsize=(10, 5))
+
+plt.bar(
+    dados_regiao.index,
+    dados_regiao["Taxa_Analfabetismo_Pct"],
+    color=[
+        "#e67e22",
+        "#e84393",
+        "#8e86bd",
+        "#36a987",
+        "#f0b91c"
+    ],
+    edgecolor="black",
+    linewidth=0.5
 )
 
-df_raw = pd.DataFrame(data_rows, index=locations, columns=columns).apply(pd.to_numeric, errors='coerce')
-df_raw.index.name = 'Localizacao'
-
-# 4. Despivotagem (Melt) para estrutura Tidy
-df_long = pd.melt(
-    df_raw.reset_index(), 
-    id_vars=['Localizacao'], 
-    var_name=['Sexo', 'Cor_Raca', 'Grupo_Idade', 'Status_Alfabetizacao'], 
-    value_name='Pessoas'
+plt.title(
+    "Taxa de Analfabetismo por Região do Brasil (2022)",
+    fontsize=13,
+    fontweight="bold"
 )
 
-df_tidy = df_long.pivot_table(
-    index=['Localizacao', 'Sexo', 'Cor_Raca', 'Grupo_Idade'], 
-    columns='Status_Alfabetizacao', 
-    values='Pessoas', 
-    aggfunc='first'
-).reset_index()
+plt.xlabel("Grande Região", fontweight="bold")
+plt.ylabel("Taxa de Analfabetismo (%)", fontweight="bold")
 
-# 5. Tratamento de nulos e cálculo da taxa de analfabetismo (%)
-df_tidy[['Alfabetizadas', 'Não alfabetizadas', 'Total']] = df_tidy[['Alfabetizadas', 'Não alfabetizadas', 'Total']].fillna(0)
-df_tidy['Taxa_Analfabetismo_Pct'] = np.where(
-    df_tidy['Total'] > 0, 
-    (df_tidy['Não alfabetizadas'] / df_tidy['Total']) * 100, 
-    0.0
-)
+plt.grid(axis="y", alpha=0.3)
+plt.ylim(0, 16.5)
 
-# Salvar o dataset transformado
-df_tidy.to_csv('Analfabetismo_data_ETL_Completo.csv', index=False, encoding='utf-8-sig')
+for i, valor in enumerate(
+    dados_regiao["Taxa_Analfabetismo_Pct"]
+):
+    plt.text(
+        i,
+        valor + 0.2,
+        f"{valor:.1f}%",
+        ha="center",
+        fontweight="bold"
+    )
+
+plt.tight_layout()
+plt.show()
 
 
 # ==========================================
-# ETAPA 2: VISUALIZAÇÃO COM MATPLOTLIB PURO
+# 7. GRÁFICO - COR OU RAÇA
 # ==========================================
 
-plt.style.use('ggplot')
-plt.rcParams['font.sans-serif'] = 'DejaVu Sans'
+cores_raca = [
+    "Indígena",
+    "Preta",
+    "Parda",
+    "Branca",
+    "Amarela"
+]
 
-# ------------------------------------------
-# Gráfico 1: Taxa de Analfabetismo por Idade
-# ------------------------------------------
-df_idade = df_tidy[
-    (df_tidy['Localizacao'] == 'Brasil') & 
-    (df_tidy['Sexo'] == 'Total') & 
-    (df_tidy['Cor_Raca'] == 'Total') & 
-    (df_tidy['Grupo_Idade'] != 'Total')
-].sort_values(by='Taxa_Analfabetismo_Pct', ascending=True)
+dados_raca = df[
+    (df["Localizacao"] == "Brasil") &
+    (df["Sexo"] == "Total") &
+    (df["Grupo_Idade"] == "Total") &
+    (df["Cor_Raca"].isin(cores_raca))
+]
 
-fig, ax = plt.subplots(figsize=(10, 5))
-ax.set_facecolor('#f8f9fa')
-bars = ax.barh(df_idade['Grupo_Idade'], df_idade['Taxa_Analfabetismo_Pct'], color='#2b5c8f', edgecolor='#1a3654', alpha=0.9, height=0.7)
-ax.set_title('Taxa de Analfabetismo por Faixa Etária - Brasil (Censo 2022)', fontsize=13, fontweight='bold', pad=15)
-ax.set_xlabel('Taxa de Analfabetismo (%)', fontsize=11, fontweight='bold')
-ax.set_ylabel('Grupo de Idade', fontsize=11, fontweight='bold')
-ax.grid(True, linestyle='--', alpha=0.6, axis='x')
+dados_raca = dados_raca.set_index("Cor_Raca")
+dados_raca = dados_raca.loc[cores_raca]
 
-for bar in bars:
-    w = bar.get_width()
-    ax.text(w + 0.3, bar.get_y() + bar.get_height()/2, f'{w:.1f}%', va='center', ha='left', fontsize=9, fontweight='bold')
 
-ax.set_xlim(0, max(df_idade['Taxa_Analfabetismo_Pct']) * 1.15)
+plt.figure(figsize=(10, 5))
+
+plt.bar(
+    dados_raca.index,
+    dados_raca["Taxa_Analfabetismo_Pct"],
+    color=[
+        "#76c7b0",
+        "#ff9470",
+        "#8fa4c8",
+        "#dc8abd",
+        "#a9d45b"
+    ],
+    edgecolor="black",
+    linewidth=0.5
+)
+
+plt.title(
+    "Taxa de Analfabetismo por Cor ou Raça - Brasil (2022)",
+    fontsize=13,
+    fontweight="bold"
+)
+
+plt.xlabel("Cor ou Raça", fontweight="bold")
+plt.ylabel("Taxa de Analfabetismo (%)", fontweight="bold")
+
+plt.grid(axis="y", alpha=0.3)
+plt.ylim(0, 18)
+
+for i, valor in enumerate(
+    dados_raca["Taxa_Analfabetismo_Pct"]
+):
+    plt.text(
+        i,
+        valor + 0.3,
+        f"{valor:.1f}%",
+        ha="center",
+        fontweight="bold"
+    )
+
 plt.tight_layout()
-plt.savefig('grafico_analfabetismo_idade_pure_mpl.png', dpi=300)
 plt.show()
 
-# ------------------------------------------
-# Gráfico 2: Taxa de Analfabetismo por Cor/Raça
-# ------------------------------------------
-df_raca = df_tidy[
-    (df_tidy['Localizacao'] == 'Brasil') & 
-    (df_tidy['Sexo'] == 'Total') & 
-    (df_tidy['Cor_Raca'] != 'Total') & 
-    (df_tidy['Grupo_Idade'] == 'Total')
-].sort_values(by='Taxa_Analfabetismo_Pct', ascending=False)
 
-fig, ax = plt.subplots(figsize=(9, 5))
-ax.set_facecolor('#f8f9fa')
-colors_raca = ['#2e8b57', '#e96a42', '#4682b4', '#d6709a', '#8a2be2']
-bars = ax.bar(df_raca['Cor_Raca'], df_raca['Taxa_Analfabetismo_Pct'], color=colors_raca, edgecolor='black', alpha=0.85, width=0.6)
-ax.set_title('Taxa de Analfabetismo por Cor ou Raça - Brasil (2022)', fontsize=13, fontweight='bold', pad=15)
-ax.set_ylabel('Taxa de Analfabetismo (%)', fontsize=11, fontweight='bold')
-ax.set_xlabel('Cor ou Raça', fontsize=11, fontweight='bold')
-ax.grid(True, linestyle='--', alpha=0.6, axis='y')
+# ==========================================
+# 8. GRÁFICO - FAIXA ETÁRIA
+# ==========================================
 
-for bar in bars:
-    h = bar.get_height()
-    ax.text(bar.get_x() + bar.get_width()/2, h + 0.2, f'{h:.1f}%', ha='center', va='bottom', fontsize=10, fontweight='bold')
+idades = [
+    "15 a 19 anos",
+    "20 a 24 anos",
+    "25 a 34 anos",
+    "35 a 44 anos",
+    "45 a 54 anos",
+    "55 a 64 anos",
+    "65 anos ou mais",
+    "75 anos ou mais",
+    "80 anos ou mais"
+]
 
-ax.set_ylim(0, max(df_raca['Taxa_Analfabetismo_Pct']) * 1.18)
+dados_idade = df[
+    (df["Localizacao"] == "Brasil") &
+    (df["Sexo"] == "Total") &
+    (df["Cor_Raca"] == "Total") &
+    (df["Grupo_Idade"].isin(idades))
+]
+
+dados_idade = dados_idade.set_index("Grupo_Idade")
+dados_idade = dados_idade.loc[idades]
+
+
+plt.figure(figsize=(10, 5))
+
+plt.barh(
+    dados_idade.index,
+    dados_idade["Taxa_Analfabetismo_Pct"],
+    color="#3d8abe",
+    edgecolor="black",
+    linewidth=0.5
+)
+
+plt.title(
+    "Taxa de Analfabetismo por Faixa Etária - Brasil (Censo 2022)",
+    fontsize=13,
+    fontweight="bold"
+)
+
+plt.xlabel("Taxa de Analfabetismo (%)", fontweight="bold")
+plt.ylabel("Grupo de idade", fontweight="bold")
+
+plt.grid(axis="x", alpha=0.3)
+plt.xlim(0, 32)
+
+for i, valor in enumerate(
+    dados_idade["Taxa_Analfabetismo_Pct"]
+):
+    plt.text(
+        valor + 0.3,
+        i,
+        f"{valor:.1f}%",
+        va="center",
+        fontweight="bold"
+    )
+
 plt.tight_layout()
-plt.savefig('grafico_analfabetismo_raca_pure_mpl.png', dpi=300)
 plt.show()
 
-# ------------------------------------------
-# Gráfico 3: Taxa de Analfabetismo por Região
-# ------------------------------------------
-regioes = ['Norte', 'Nordeste', 'Sudeste', 'Sul', 'Centro-Oeste']
-df_regioes = df_tidy[
-    (df_tidy['Localizacao'].isin(regioes)) & 
-    (df_tidy['Sexo'] == 'Total') & 
-    (df_tidy['Cor_Raca'] == 'Total') & 
-    (df_tidy['Grupo_Idade'] == 'Total')
-].sort_values(by='Taxa_Analfabetismo_Pct', ascending=False)
 
-fig, ax = plt.subplots(figsize=(9, 5))
-ax.set_facecolor('#f8f9fa')
-colors_reg = ['#d95f02', '#e7298a', '#7570b3', '#1b9e77', '#e6ab02']
-bars = ax.bar(df_regioes['Localizacao'], df_regioes['Taxa_Analfabetismo_Pct'], color=colors_reg, edgecolor='black', alpha=0.85, width=0.6)
-ax.set_title('Taxa de Analfabetismo por Região do Brasil (2022)', fontsize=13, fontweight='bold', pad=15)
-ax.set_ylabel('Taxa de Analfabetismo (%)', fontsize=11, fontweight='bold')
-ax.set_xlabel('Grande Região', fontsize=11, fontweight='bold')
-ax.grid(True, linestyle='--', alpha=0.6, axis='y')
+# ==========================================
+# GRÁFICO - SEXO
+# ==========================================
 
-for bar in bars:
-    h = bar.get_height()
-    ax.text(bar.get_x() + bar.get_width()/2, h + 0.2, f'{h:.1f}%', ha='center', va='bottom', fontsize=10, fontweight='bold')
+dados_sexo = df[
+    (df["Localizacao"] == "Brasil") &
+    (df["Cor_Raca"] == "Total") &
+    (df["Grupo_Idade"] == "Total") &
+    (df["Sexo"] != "Total")
+]
 
-ax.set_ylim(0, max(df_regioes['Taxa_Analfabetismo_Pct']) * 1.18)
+dados_sexo = dados_sexo[
+    ["Sexo", "Taxa_Analfabetismo_Pct"]
+]
+
+dados_sexo = dados_sexo.set_index("Sexo")
+
+
+plt.figure(figsize=(8, 5))
+
+plt.bar(
+    dados_sexo.index,
+    dados_sexo["Taxa_Analfabetismo_Pct"],
+    color=["#4a90e2", "#e8759b"],
+    edgecolor="black",
+    linewidth=0.5
+)
+
+plt.title(
+    "Taxa de Analfabetismo por Sexo - Brasil (2022)",
+    fontsize=13,
+    fontweight="bold"
+)
+
+plt.xlabel(
+    "Sexo",
+    fontweight="bold"
+)
+
+plt.ylabel(
+    "Taxa de Analfabetismo (%)",
+    fontweight="bold"
+)
+
+plt.grid(
+    axis="y",
+    alpha=0.3
+)
+
+plt.ylim(
+    0,
+    max(dados_sexo["Taxa_Analfabetismo_Pct"]) + 2
+)
+
+
+# Valores acima das barras
+for i, valor in enumerate(
+    dados_sexo["Taxa_Analfabetismo_Pct"]
+):
+    plt.text(
+        i,
+        valor + 0.2,
+        f"{valor:.1f}%",
+        ha="center",
+        fontweight="bold"
+    )
+
 plt.tight_layout()
-plt.savefig('grafico_analfabetismo_regioes_pure_mpl.png', dpi=300)
 plt.show()
